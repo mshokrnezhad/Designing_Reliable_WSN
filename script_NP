@@ -1,0 +1,74 @@
+#!/bin/sh
+
+PN=1000 #Numer of Sensors
+PM=200 #Maximum Number of Routers
+PS=9050 #Random Seed
+PR=200 #Size of the Environment
+PMDS=2 #Max Distance Between Sensors (in at least 1D)
+PMDR=5 #Max Distance Between Routers (in at least 1D)
+frel=0.99 #Target Network Reliability
+PLR=0.6 #Link Reliability
+
+echo "Initializing the Underlying Network..."
+PRR=$(echo "($PMDR*2)+2" | bc)
+echo $PRR >> R_rr.txt
+g++ c01-srg.cpp -o b01.out
+./b01.out $PN $PS $PR $PMDS
+echo "Successfully Done!"
+
+echo "Initializing the Routing Network..."
+g++ c02-ptd.cpp -o b02.out
+./b02.out $PMDR $PM $PR 
+echo "Successfully Done!"
+
+echo "Processing the Routing Network..."
+g++ c03-dc.cpp -o b03.out
+./b03.out $PMDR
+echo "Successfully Done!"
+
+echo "Calculating the Reliability of the Routing Network..."
+g++ c04-rhc.cpp -o b04.out
+./b04.out $PLR
+echo "Successfully Done!"
+
+rel=`cat rel.txt`
+
+echo "The Reliability is " $rel
+
+while [ $(echo "$rel < $frel" | bc) -ne 0 ] 
+do
+	echo "The Target Reliability is not Achieved..."
+	echo "Adding a New Router to the Routing Network..."
+
+	./scip.spx -f c05-rel.zpl>log.txt	
+
+	grep '^XR#' log.txt | awk  '{print $2}' >> rawx.txt
+	grep '^XR#' log.txt | awk  '{print $2}' >> rrx.txt
+	grep '^YR#' log.txt | awk  '{print $2}' >> rawy.txt
+	grep '^YR#' log.txt | awk  '{print $2}' >> rry.txt
+	
+	echo "Processing the Routing Network..."
+	g++ c03-dc.cpp -o b03.out
+	./b03.out $PMDR
+	echo "Successfully Done!"
+	
+	echo "Calculating the Reliability of the Routing Network..."
+	g++ c04-rhc.cpp -o b04.out
+	./b04.out $PLR
+	echo "Successfully Done!"
+
+	rel=`cat rel.txt`
+	echo "The Reliability is " $rel
+done
+
+echo "The Target Reliability is Reached..."
+
+echo "Showing Results..."
+python3 c06-plot.py
+echo "Successfully Done!"
+
+echo "Cleaning..."
+rm b03.out finalx.txt finaly.txt log.txt mindeg.txt mindegcount.txt n.txt N.txt b02.out r.txt rawdeg.txt rawx.txt rawy.txt rel.txt result.txt b04.out R_rr.txt rrx.txt rry.txt sortdeg.txt b01.out xs.txt ys.txt
+echo "Successfully Done!"
+
+
